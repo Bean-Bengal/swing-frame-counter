@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Swing Frame Counter</title>
+<title>Pet Portrait Price List</title>
 </head>
 <body>
 <script data-bean-store>(function(){if(typeof location!=='undefined'&&location&&location.protocol==='about:'&&typeof document!=='undefined'&&document.addEventListener){document.addEventListener('click',function(e){var a=e.target&&e.target.closest&&e.target.closest('a[href^="#"]');if(!a||a.target==='_blank')return;e.preventDefault();try{location.hash=a.getAttribute('href')}catch(x){}},true)}if(typeof window==='undefined')return;try{window.localStorage.getItem('x');return}catch(e){}var d=Object.assign({},window.__BEAN_SAVED||{});function post(){try{parent.postMessage({type:'bean-store',data:d},'*')}catch(e){}}var ls={getItem:function(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null},setItem:function(k,v){d[k]=String(v);post()},removeItem:function(k){delete d[k];post()},clear:function(){d={};post()},key:function(i){return Object.keys(d)[i]||null}};Object.defineProperty(ls,'length',{get:function(){return Object.keys(d).length}});try{Object.defineProperty(window,'localStorage',{value:ls,configurable:true})}catch(e){}})();</script>
@@ -274,56 +274,58 @@
 
 </script>
 <script>
-const FPS = 60;
-function framesHeld(downMs, upMs, fps) { return Math.max(0, Math.round((upMs - downMs) / 1000 * fps)); }
-function tally(events, fps) {
-  let down = null, swings = 0, total = 0, last = 0;
-  for (const e of events) {
-    if (e.type === 'down' && down === null) down = e.t;
-    if (e.type === 'up' && down !== null) { last = framesHeld(down, e.t, fps); total += last; swings++; down = null; }
-  }
-  return { swings, total, last };
+const FLAT = 25;
+function cardTotal(card) { return card.reduce((a, c) => a + c.qty * FLAT, 0); }
+function listTotal(list) { return list.reduce((a, l) => a + l.price, 0); }
+function checkAgree(card, list) {
+  const problems = [];
+  const n = card.reduce((a, c) => a + c.qty, 0);
+  if (list.length !== n) problems.push('Card has ' + n + ' portraits, listing has ' + list.length);
+  list.forEach(l => { if (l.price !== FLAT) problems.push(l.pet + ' is listed at €' + l.price + ', not €' + FLAT); });
+  if (cardTotal(card) !== listTotal(list)) problems.push('Totals differ: card €' + cardTotal(card) + ', listing €' + listTotal(list));
+  return { ok: problems.length === 0, problems };
 }
-function tallyBroken(events, fps) {
-  let swings = 0;
-  for (const e of events) if (e.type === 'down') swings++;
-  return { swings, total: 0, last: 0 };
+function checkAgreeBroken(card, list) {
+  const ok = cardTotal(card) === listTotal(list);
+  return { ok, problems: ok ? [] : ['totals differ'] };
 }
-const held = [{type:'down',t:0},{type:'down',t:30},{type:'down',t:60},{type:'down',t:90},{type:'up',t:500}];
+const goodCard = [{ pet: 'Mochi', qty: 1 }, { pet: 'Biscuit', qty: 1 }];
+const goodList = [{ pet: 'Mochi', price: 25 }, { pet: 'Biscuit', price: 25 }];
+const badList = [{ pet: 'Mochi', price: 20 }, { pet: 'Biscuit', price: 30 }];
 function selfTest() {
   const r = [];
-  r.push(framesHeld(0, 500, 60) === 30);
-  r.push(framesHeld(0, 0, 60) === 0);
-  const a = tally(held, 60);
-  r.push(a.swings === 1 && a.total === 30 && a.last === 30);
-  const z = tally([], 60);
-  r.push(z.swings === 0 && z.total === 0 && z.last === 0);
-  r.push(tally([{type:'down',t:0}], 60).swings === 0);
-  const good = r.every(Boolean);
-  const twinRejected = tallyBroken(held, 60).swings !== 1;
-  return good && twinRejected;
+  r.push(cardTotal(goodCard) === 50);
+  r.push(checkAgree(goodCard, goodList).ok === true);
+  r.push(checkAgree(goodCard, badList).ok === false);
+  r.push(checkAgree(goodCard, goodList.slice(0, 1)).ok === false);
+  r.push(checkAgree([], []).ok === true);
+  r.push(checkAgree(goodCard, [{ pet: 'Mochi', price: 25 }, { pet: 'Biscuit', price: 26 }]).ok === false);
+  const twinWrong = checkAgreeBroken(goodCard, badList).ok === true;
+  return r.every(Boolean) && twinWrong;
 }
 const ok = selfTest();
-let downAt = null;
-Kit.css('.bn{padding:8px 12px;border-radius:8px;font-weight:bold;margin-bottom:8px}.bn.p{background:#cfe9cf;color:#143}.bn.f{background:#f3c9c9;color:#600}');
-Kit.app({ title: 'Swing Frame Counter', subtitle: 'Bloodborne swing notes', icon: '🪓', save: 'bbswing', state: { events: [] },
+Kit.css('.bn{padding:8px 12px;border-radius:8px;font-weight:bold;margin-bottom:8px}.bn.p{background:#cfe9cf;color:#143}.bn.f{background:#f3c9c9;color:#600}.pr{color:#a33}.mm{font-weight:bold;color:#a33}');
+Kit.app({ title: 'Pet Portrait Price List', subtitle: 'Flat €25 a portrait', icon: '🐾', save: 'ppprice',
+  state: { card: goodCard, list: goodList, newPet: '' },
   view: (s, set) => {
-    const t = tally(s.events, FPS);
-    const box = Kit.el('div', { tabindex: '0', style: { padding: '28px', border: '2px dashed currentColor', borderRadius: '12px', textAlign: 'center', userSelect: 'none' } }, 'Click here, then hold and release any key. Frames are counted when you let go.');
-    box.addEventListener('keydown', e => { if (e.repeat) return; if (downAt === null) downAt = performance.now(); });
-    box.addEventListener('keyup', e => {
-      if (downAt === null) return;
-      const up = performance.now();
-      const ev = [{type:'down',t:downAt},{type:'up',t:up}];
-      downAt = null;
-      set({ events: s.events.concat(ev) });
-    });
-    setTimeout(() => { try { box.focus(); } catch (e) {} }, 0);
+    const res = checkAgree(s.card, s.list);
+    const bad = checkAgree(goodCard, badList);
     return [
-      Kit.el('div', { className: 'bn ' + (ok ? 'p' : 'f') }, ok ? 'Self-test: pass (broken twin rejected)' : 'Self-test: FAIL'),
-      Kit.grid([Kit.stat(String(t.swings), 'swings'), Kit.stat(String(t.total), 'total frames'), Kit.stat(String(t.last), 'last swing frames')]),
-      Kit.card('Swing', box),
-      Kit.button('Reset', () => set({ events: [] }), 'ghost')
+      Kit.el('div', { className: 'bn ' + (ok ? 'p' : 'f') }, ok ? 'Self-test: pass (broken copy rejected)' : 'Self-test: FAIL'),
+      Kit.grid([Kit.stat(String(cardTotal(s.card)), 'card total €'), Kit.stat(String(listTotal(s.list)), 'listing total €')]),
+      Kit.card('Agreement', Kit.el('div', { className: res.ok ? '' : 'mm' }, res.ok ? 'Card and listing agree.' : 'MISMATCH'),
+        ...res.problems.map(p => Kit.el('div', { className: 'pr' }, p))),
+      Kit.card('Stall listing', Kit.list(s.list, (l, i) => ['🐱', l.pet, '€' + l.price], 'Nothing listed')),
+      Kit.card('Broken copy (must fail)',
+        Kit.el('div', {}, 'Mochi €20 + Biscuit €30 totals 50, same as the card.'),
+        Kit.el('div', { className: bad.ok ? 'mm' : 'pr' }, bad.ok ? 'CHECK PASSED IT: checker is broken' : 'Rejected, as it should be:'),
+        ...bad.problems.map(p => Kit.el('div', { className: 'pr' }, p))),
+      Kit.card('Add a portrait',
+        Kit.field('Pet name', s.newPet, v => set({ newPet: v }), { key: 'pet' }),
+        Kit.row(
+          Kit.button('Add at €25', () => { if (!s.newPet.trim()) return; set({ card: s.card.concat([{ pet: s.newPet, qty: 1 }]), list: s.list.concat([{ pet: s.newPet, price: 25 }]), newPet: '' }); }, 'primary'),
+          Kit.button('Add listing at €20 (wrong)', () => set({ list: s.list.concat([{ pet: 'Oops', price: 20 }]) }), 'small'),
+          Kit.button('Reset', () => set({ card: goodCard, list: goodList }), 'ghost')))
     ];
   } });
 </script>
